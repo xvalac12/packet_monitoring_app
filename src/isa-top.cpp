@@ -1,14 +1,40 @@
-#include <iostream>
-#include <stdio.h>
-#include <pcap.h>
-#include <string>
+#include <stdio.h>              // std c
 
+#include <iostream>             // std c++
+#include <string>               // string data type
+#include <map>                  // map container
+
+#include <pcap.h>               // packet capturing
+#include <netinet/ip.h>         // ip header
+#include <netinet/tcp.h>        // tcp header
+#include <netinet/udp.h>        // udp header
+#include <netinet/ip_icmp.h>    // icmp header
 
 using namespace std;
 
+
+struct Packet
+{
+    string src_addr;
+    string dst_addr;
+    int protocol;
+    int size;
+};
+
 void callback(u_char *args, const struct pcap_pkthdr *header, const u_char *packet)
 {
-    return;
+    struct ip *ipv4_header = (struct ip*)(packet + 14);
+    
+    Packet new_packet;
+    new_packet.src_addr = inet_ntoa(ipv4_header->ip_src);
+    new_packet.dst_addr = inet_ntoa(ipv4_header->ip_src);
+    new_packet.protocol = ipv4_header->ip_p;
+    new_packet.size = header->len;
+
+    cout << new_packet.src_addr << " | "
+    << new_packet.dst_addr << " |    "
+    << new_packet.protocol << "    | "
+    << new_packet.size  << " b"<< endl;  
 }
 
 
@@ -50,7 +76,10 @@ int main(int argc, char *argv[])
         return(-2);
     }
     
-    pcap_loop(handler, 1, callback, NULL);
+
+    cout << "Source IP       | Destination IP  | Protocol | Packet Size" << endl;
+
+    pcap_loop(handler, 10, callback, NULL);
     
 	pcap_freecode(&filter);
     pcap_close(handler);
