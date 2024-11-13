@@ -13,7 +13,8 @@
 
 /*                      Networking libraries               */
 #include <pcap.h>               // packet capturing
-#include <netinet/ip.h>         // ip header
+#include <netinet/ip.h>         // ipv4 header
+#include <netinet/ip6.h>        // ipv6 header 
 #include <netinet/tcp.h>        // tcp header
 #include <netinet/udp.h>        // udp header
 #include <netinet/ip_icmp.h>    // icmp header
@@ -26,7 +27,7 @@
 using namespace std;
 
 /**
- * @brief 
+ * @brief struct Packet, which will ne used as template for key of map
  * 
  */
 struct Packet
@@ -66,11 +67,11 @@ struct Packet
         }
     }
     /**
-     * @brief 
+     * @brief overloading of < operator with function tie for simplification
      * 
-     * @param aux 
-     * @return true 
-     * @return false 
+     * @param aux reference to object
+     * @return true objects are not same
+     * @return false it is same object
      */
     bool operator<(const Packet& aux) const 
     {
@@ -80,42 +81,75 @@ struct Packet
     }
 };
 /**
- * @brief 
+ * @brief map, where Packet is key and nested pair is value, it is used for storing communication to refresh
  * 
  */
 map<Packet, pair<pair<int,int>, pair<int,int>>> communication;
 
 /**
- * @brief 
+ * @brief function called by pcap_loop() everytime packet is captured on interface
  * 
- * @param args 
- * @param header 
- * @param packet 
+ * @param args special pointer for user defined data (last parameter of pcap_loop())
+ * @param header struct with metadata of packet (timestamp, packet lenght, lenght of packet before capture)
+ * @param packet pointer to packet data
  */
 void callback(u_char *args, const struct pcap_pkthdr *header, const u_char *packet)
 {
     struct ip *ethernet_header = (struct ip*)(packet + 14); // lenght of ethernet header
+    uint16_t ether_type = ntohs(*(uint16_t*)(packet + 12));
     int data_size = header->len;
     int src_port = 0;
     int dst_port = 0;
+    string src_addr;
+    string dst_addr; 
+    int protocol = 0;
 
-    if (ethernet_header->ip_p == 6)
+    if (ether_type == 0x0800) 
     {
-        struct tcphdr *tcp = (struct tcphdr*)(packet + 14 + ethernet_header->ip_hl * 4);
-        src_port = ntohs(tcp->th_sport);
-        dst_port = ntohs(tcp->th_dport);
-    } 
-    else if (ethernet_header->ip_p == 17) 
-    {
-        struct udphdr *udp = (struct udphdr*)(packet + 14 + ethernet_header->ip_hl * 4);
-        src_port = ntohs(udp->uh_sport);
-        dst_port = ntohs(udp->uh_dport);
+        protocol = ethernet_header->ip_p;
+        src_addr = inet_ntoa(ethernet_header->ip_src);
+        dst_addr = inet_ntoa(ethernet_header->ip_dst);
+    
+        if (ethernet_header->ip_p == 6)
+        {
+            struct tcphdr *tcp = (struct tcphdr*)(packet + 14 + ethernet_header->ip_hl * 4);
+            src_port = ntohs(tcp->th_sport);
+            dst_port = ntohs(tcp->th_dport);
+        } 
+        else if (ethernet_header->ip_p == 17) 
+        {
+            struct udphdr *udp = (struct udphdr*)(packet + 14 + ethernet_header->ip_hl * 4);
+            src_port = ntohs(udp->uh_sport);
+            dst_port = ntohs(udp->uh_dport);
+        }
+    }
+    else if (ether_type == 0x86DD) 
+    { 
+        struct ip6_hdr *ipv6_header = (struct ip6_hdr*)(packet + 14);
+        char readable_src_ip[INET6_ADDRSTRLEN];
+        char readable_dst_ip[INET6_ADDRSTRLEN];
+
+        inet_ntop(AF_INET6, &(ipv6_header->ip6_src), readable_src_ip, INET6_ADDRSTRLEN);
+        inet_ntop(AF_INET6, &(ipv6_header->ip6_dst), readable_dst_ip, INET6_ADDRSTRLEN);
+
+        src_addr = readable_src_ip;
+        dst_addr = readable_dst_ip;
+        protocol = ipv6_header->ip6_nxt;
+
+        if (protocol == 6) 
+        {
+            struct tcphdr *tcp = (struct tcphdr*)(packet + 14 + sizeof(struct ip6_hdr));
+            src_port = ntohs(tcp->th_sport);
+            dst_port = ntohs(tcp->th_dport);
+        } 
+        else if (protocol == 17) 
+        {
+            struct udphdr *udp = (struct udphdr*)(packet + 14 + sizeof(struct ip6_hdr));
+            src_port = ntohs(udp->uh_sport);
+            dst_port = ntohs(udp->uh_dport);
+        }
     }
 
-    string src_addr = inet_ntoa(ethernet_header->ip_src);
-    string dst_addr = inet_ntoa(ethernet_header->ip_dst);
-    
-    int protocol = ethernet_header->ip_p;
     if (protocol == 128) return;
 
     Packet new_packet(src_addr, dst_addr, src_port, dst_port, protocol);
@@ -221,12 +255,12 @@ string convert_protocol(int value)
 void print_head()
 {
     mvprintw(0, 0, "Src IP:port");
-    mvprintw(0, 25, "Dst IP:port");
-    mvprintw(0, 50, "Proto");
-    mvprintw(0, 60, "Rx");
-    mvprintw(0, 75, "Tx");   
-    mvprintw(1, 60, "b/s     p/s");
-    mvprintw(1, 75, "b/s     p/s");
+    mvprintw(0, 45, "Dst IP:port");
+    mvprintw(0, 90, "Proto");
+    mvprintw(0, 100, "Rx");
+    mvprintw(0, 115, "Tx");   
+    mvprintw(1, 100, "b/s     p/s");
+    mvprintw(1, 115, "b/s     p/s");
 }
 
 /**
@@ -254,18 +288,18 @@ void print_stats(bool sort_by_size)
         if (convert_protocol(entry.first.def_protocol) == "ICMP")
         {
             mvprintw(2 + cnt, 0 , "%s", entry.first.first_addr.c_str());
-            mvprintw(2 + cnt, 25 , "%s", entry.first.second_addr.c_str());
+            mvprintw(2 + cnt, 45 , "%s", entry.first.second_addr.c_str());
         }
         else
         {
             mvprintw(2 + cnt, 0 , "%s:%d", entry.first.first_addr.c_str(), entry.first.first_port);
-            mvprintw(2 + cnt, 25 , "%s:%d", entry.first.second_addr.c_str(), entry.first.second_port);
+            mvprintw(2 + cnt, 45 , "%s:%d", entry.first.second_addr.c_str(), entry.first.second_port);
         }
-        mvprintw(2 + cnt, 50 , "%s", convert_protocol(entry.first.def_protocol).c_str());
-        mvprintw(2 + cnt, 60 , "%s", convert_bandwidth(entry.second.first.first).c_str());
-        mvprintw(2 + cnt, 68 , "%s", convert_bandwidth(entry.second.first.second).c_str());
-        mvprintw(2 + cnt, 75 , "%s", convert_bandwidth(entry.second.second.first).c_str());
-        mvprintw(2 + cnt, 83 , "%s", convert_bandwidth(entry.second.second.second).c_str());
+        mvprintw(2 + cnt, 90 , "%s", convert_protocol(entry.first.def_protocol).c_str());
+        mvprintw(2 + cnt, 100 , "%s", convert_bandwidth(entry.second.first.first).c_str());
+        mvprintw(2 + cnt, 108 , "%s", convert_bandwidth(entry.second.first.second).c_str());
+        mvprintw(2 + cnt, 115 , "%s", convert_bandwidth(entry.second.second.first).c_str());
+        mvprintw(2 + cnt, 123 , "%s", convert_bandwidth(entry.second.second.second).c_str());
     }
     refresh();
 }
