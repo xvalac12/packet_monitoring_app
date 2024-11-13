@@ -1,69 +1,124 @@
+/*                      C Libraries                       */
 #include <stdio.h>              // std c
 #include <unistd.h>             // getopt function
 
+/*                      C++ libaries                      */
 #include <iostream>             // std c++
 #include <string>               // string data type
 #include <map>                  // map container
-//#include <tuple>
 #include <algorithm>            // sort function
 #include <vector>               // using vector
 #include <iomanip>              // precision set
 #include <sstream>
 
+/*                      Networking libraries               */
 #include <pcap.h>               // packet capturing
 #include <netinet/ip.h>         // ip header
 #include <netinet/tcp.h>        // tcp header
 #include <netinet/udp.h>        // udp header
 #include <netinet/ip_icmp.h>    // icmp header
- 
-#include <ncurses.h>            // 
+
+/*               Libraries for print on terminal            */
+#include <ncurses.h>            // printing in terminal
 #include <thread>               // ncurses thread for print
+
 
 using namespace std;
 
-
+/**
+ * @brief 
+ * 
+ */
 struct Packet
 {
     string first_addr;
     string second_addr;
+    int first_port;
+    int second_port;
     int def_protocol;
 
-    Packet(string& src_addr, string& dst_addr, int protocol) 
+    /**
+     * @brief Construct a new Packet object
+     * 
+     * @param src_addr 
+     * @param dst_addr 
+     * @param src_port 
+     * @param dst_port 
+     * @param protocol 
+     */
+    Packet(string& src_addr, string& dst_addr, int src_port, int dst_port, int protocol) 
     {
-        if (src_addr > dst_addr) {
+        def_protocol = protocol;
+
+        if (src_addr > dst_addr)
+        {
             first_addr = src_addr;
+            first_port = src_port;
             second_addr = dst_addr;
+            second_port = dst_port;
         } 
         else 
         {
             first_addr = dst_addr;
+            first_port = dst_port;
             second_addr = src_addr;
+            second_port = src_port;
         }
-        def_protocol = protocol;
     }
-
-    bool operator<(const Packet& other) const 
+    /**
+     * @brief 
+     * 
+     * @param aux 
+     * @return true 
+     * @return false 
+     */
+    bool operator<(const Packet& aux) const 
     {
         return 
-        tie(first_addr, second_addr, def_protocol) < 
-        tie(other.first_addr, other.second_addr, other.def_protocol);
+        tie(first_addr, second_addr, first_port, second_port, def_protocol) < 
+        tie(aux.first_addr, aux.second_addr, aux.first_port, aux.second_port, aux.def_protocol);
     }
 };
-
+/**
+ * @brief 
+ * 
+ */
 map<Packet, pair<pair<int,int>, pair<int,int>>> communication;
 
+/**
+ * @brief 
+ * 
+ * @param args 
+ * @param header 
+ * @param packet 
+ */
 void callback(u_char *args, const struct pcap_pkthdr *header, const u_char *packet)
 {
-    struct ip *ipv4_header = (struct ip*)(packet + 14);
-    
-    string src_addr = inet_ntoa(ipv4_header->ip_src);
-    string dst_addr = inet_ntoa(ipv4_header->ip_dst);
-    int protocol = ipv4_header->ip_p;
+    struct ip *ethernet_header = (struct ip*)(packet + 14); // lenght of ethernet header
     int data_size = header->len;
+    int src_port = 0;
+    int dst_port = 0;
+
+    if (ethernet_header->ip_p == 6)
+    {
+        struct tcphdr *tcp = (struct tcphdr*)(packet + 14 + ethernet_header->ip_hl * 4);
+        src_port = ntohs(tcp->th_sport);
+        dst_port = ntohs(tcp->th_dport);
+    } 
+    else if (ethernet_header->ip_p == 17) 
+    {
+        struct udphdr *udp = (struct udphdr*)(packet + 14 + ethernet_header->ip_hl * 4);
+        src_port = ntohs(udp->uh_sport);
+        dst_port = ntohs(udp->uh_dport);
+    }
+
+    string src_addr = inet_ntoa(ethernet_header->ip_src);
+    string dst_addr = inet_ntoa(ethernet_header->ip_dst);
     
+    int protocol = ethernet_header->ip_p;
     if (protocol == 128) return;
 
-    Packet new_packet(src_addr, dst_addr, protocol);
+    Packet new_packet(src_addr, dst_addr, src_port, dst_port, protocol);
 
     if (src_addr == new_packet.first_addr && dst_addr == new_packet.second_addr)
     {
@@ -77,17 +132,38 @@ void callback(u_char *args, const struct pcap_pkthdr *header, const u_char *pack
     }
 }
 
+/**
+ * @brief 
+ * 
+ * @param first_pair 
+ * @param second_pair 
+ * @return true 
+ * @return false 
+ */
 bool sort_by_data_size(pair<Packet, pair<pair<int, int>, pair<int, int>>>& first_pair, pair<Packet, pair<pair<int, int>, pair<int, int>>>& second_pair) 
 {
     return (first_pair.second.first.first + first_pair.second.second.first) > (second_pair.second.first.first + second_pair.second.second.first);
 }
 
+/**
+ * @brief 
+ * 
+ * @param first_pair 
+ * @param second_pair 
+ * @return true 
+ * @return false 
+ */
 bool sort_by_packet_count(pair<Packet, pair<pair<int, int>, pair<int, int>>>& first_pair, pair<Packet, pair<pair<int, int>, pair<int, int>>>& second_pair) 
 {
     return (first_pair.second.first.second + first_pair.second.second.second) > (second_pair.second.first.second + second_pair.second.second.second);
 }
 
-
+/**
+ * @brief 
+ * 
+ * @param value 
+ * @return string 
+ */
 string convert_bandwidth(float value) 
 {
     ostringstream stream; 
@@ -113,6 +189,12 @@ string convert_bandwidth(float value)
     return stream.str();
 }    
 
+/**
+ * @brief 
+ * 
+ * @param value 
+ * @return string 
+ */
 string convert_protocol(int value)
 {
     switch (value)
@@ -132,17 +214,26 @@ string convert_protocol(int value)
     }
 }
 
+/**
+ * @brief 
+ * 
+ */
 void print_head()
 {
     mvprintw(0, 0, "Src IP:port");
-    mvprintw(0, 20, "Dst IP:port");
-    mvprintw(0, 40, "Proto");
-    mvprintw(0, 50, "Rx");
-    mvprintw(0, 65, "Tx");   
-    mvprintw(1, 50, "b/s     p/s");
-    mvprintw(1, 65, "b/s     p/s");
+    mvprintw(0, 25, "Dst IP:port");
+    mvprintw(0, 50, "Proto");
+    mvprintw(0, 60, "Rx");
+    mvprintw(0, 75, "Tx");   
+    mvprintw(1, 60, "b/s     p/s");
+    mvprintw(1, 75, "b/s     p/s");
 }
 
+/**
+ * @brief 
+ * 
+ * @param sort_by_size 
+ */
 void print_stats(bool sort_by_size) 
 {
     vector<pair<Packet, pair<pair<int, int>, pair<int, int>>>> sorted_vector(communication.begin(), communication.end());
@@ -160,18 +251,32 @@ void print_stats(bool sort_by_size)
     for (size_t cnt = 0; cnt < min(sorted_vector.size(), size_t(10)); ++cnt) 
     {
         auto &entry = sorted_vector[cnt];
-        mvprintw(cnt + 2, 0 , "%s", entry.first.first_addr.c_str());
-        mvprintw(cnt + 2, 20 , "%s", entry.first.second_addr.c_str());
-        mvprintw(cnt + 2, 40 , "%s", convert_protocol(entry.first.def_protocol).c_str());
-        mvprintw(cnt + 2, 50 , "%s", convert_bandwidth(entry.second.first.first).c_str());
-        mvprintw(cnt + 2, 58 , "%s", convert_bandwidth(entry.second.first.second).c_str());
-        mvprintw(cnt + 2, 65 , "%s", convert_bandwidth(entry.second.second.first).c_str());
-        mvprintw(cnt + 2, 73 , "%s", convert_bandwidth(entry.second.second.second).c_str());
+        if (convert_protocol(entry.first.def_protocol) == "ICMP")
+        {
+            mvprintw(2 + cnt, 0 , "%s", entry.first.first_addr.c_str());
+            mvprintw(2 + cnt, 25 , "%s", entry.first.second_addr.c_str());
+        }
+        else
+        {
+            mvprintw(2 + cnt, 0 , "%s:%d", entry.first.first_addr.c_str(), entry.first.first_port);
+            mvprintw(2 + cnt, 25 , "%s:%d", entry.first.second_addr.c_str(), entry.first.second_port);
+        }
+        mvprintw(2 + cnt, 50 , "%s", convert_protocol(entry.first.def_protocol).c_str());
+        mvprintw(2 + cnt, 60 , "%s", convert_bandwidth(entry.second.first.first).c_str());
+        mvprintw(2 + cnt, 68 , "%s", convert_bandwidth(entry.second.first.second).c_str());
+        mvprintw(2 + cnt, 75 , "%s", convert_bandwidth(entry.second.second.first).c_str());
+        mvprintw(2 + cnt, 83 , "%s", convert_bandwidth(entry.second.second.second).c_str());
     }
     refresh();
 }
 
-
+/**
+ * @brief 
+ * 
+ * @param argc 
+ * @param argv 
+ * @return int 
+ */
 int main(int argc, char *argv[])
 {
 
