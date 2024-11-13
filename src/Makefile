@@ -1,9 +1,9 @@
 # Compiler and flags
 CXX = g++
-CXXFLAGS = -Wall -std=c++11
+CXXFLAGS = -Wall
 
 # Libraries to link with
-LIBS = -lpcap
+LIBS = -lpcap -lncurses
 
 # Target executable name
 TARGET = isa-top
