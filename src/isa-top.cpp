@@ -3,15 +3,20 @@
 #include <iostream>             // std c++
 #include <string>               // string data type
 #include <map>                  // map container
-#include <tuple>
-#include <algorithm>
+//#include <tuple>
+#include <algorithm>            // sort function
+#include <vector>               // using vector
+#include <iomanip>              // precision set
+#include <sstream>
 
 #include <pcap.h>               // packet capturing
 #include <netinet/ip.h>         // ip header
 #include <netinet/tcp.h>        // tcp header
 #include <netinet/udp.h>        // udp header
 #include <netinet/ip_icmp.h>    // icmp header
-
+ 
+#include <ncurses.h>            // 
+#include <thread>               // ncurses thread for print
 
 using namespace std;
 
@@ -21,9 +26,6 @@ struct Packet
     string first_addr;
     string second_addr;
     int def_protocol;
-    
-    // used for 
-   
 
     Packet(string& src_addr, string& dst_addr, int protocol) 
     {
@@ -47,29 +49,119 @@ struct Packet
     }
 };
 
-map<Packet, pair<int, int>> communication;
+map<Packet, pair<pair<int,int>, pair<int,int>>> communication;
 
 void callback(u_char *args, const struct pcap_pkthdr *header, const u_char *packet)
 {
-    struct ip *ipv4_header = (struct ip*)(packet + 14); // skip header
+    struct ip *ipv4_header = (struct ip*)(packet + 14);
     
     string src_addr = inet_ntoa(ipv4_header->ip_src);
     string dst_addr = inet_ntoa(ipv4_header->ip_dst);
     int protocol = ipv4_header->ip_p;
     int data_size = header->len;
+    
+    if (protocol == 128) return;
 
     Packet new_packet(src_addr, dst_addr, protocol);
 
-    if (src_addr == new_packet.first_addr)
+    if (src_addr == new_packet.first_addr && dst_addr == new_packet.second_addr)
     {
-        communication[new_packet].first += data_size;
+        communication[new_packet].first.first += data_size;
+        communication[new_packet].first.second += 1;
     }
     else
     {
-        communication[new_packet].second += data_size;
+        communication[new_packet].second.first += data_size;
+        communication[new_packet].second.second += 1;
     }
 }
 
+bool sort_by_data_size(pair<Packet, pair<pair<int, int>, pair<int, int>>>& first_pair, pair<Packet, pair<pair<int, int>, pair<int, int>>>& second_pair) 
+{
+    return (first_pair.second.first.first + first_pair.second.second.first) > (second_pair.second.first.first + second_pair.second.second.first);
+}
+
+bool sort_by_packet_count(pair<Packet, pair<pair<int, int>, pair<int, int>>>& first_pair, pair<Packet, pair<pair<int, int>, pair<int, int>>>& second_pair) 
+{
+    return (first_pair.second.first.second + first_pair.second.second.second) > (second_pair.second.first.second + second_pair.second.second.second);
+}
+
+
+string convert_bandwidth(float value) 
+{
+    ostringstream stream; 
+    stream << fixed << setprecision(1);
+
+    if (value >= 1000000000) 
+    {
+        stream << value / 1000000000 << + "G";
+    }
+    else if (value >= 1000000) 
+    {
+        stream << value / 1000000 << + "M";
+    }
+    else if (value >= 1000) 
+    {
+        stream << value / 1000 << + "k";
+    }
+    else
+    {
+        return to_string(int(value)); 
+    }
+
+    return stream.str();
+}    
+
+string convert_protocol(int value)
+{
+    switch (value)
+    {
+        case 6:
+            return "TCP";
+            break;
+        case 17:
+            return "UDP";
+            break;
+        case 1:
+            return "ICMP";
+            break;
+        default:
+            return "ERR";
+            break;
+    }
+}
+
+void print_head()
+{
+    mvprintw(0, 0, "Src IP:port");
+    mvprintw(0, 20, "Dst IP:port");
+    mvprintw(0, 40, "Proto");
+    mvprintw(0, 50, "Rx");
+    mvprintw(0, 65, "Tx");   
+    mvprintw(1, 50, "b/s     p/s");
+    mvprintw(1, 65, "b/s     p/s");
+}
+
+void print_stats() 
+{
+    vector<pair<Packet, pair<pair<int, int>, pair<int, int>>>> sorted_vector(communication.begin(), communication.end());
+    communication.clear();
+    sort(sorted_vector.begin(), sorted_vector.end(), sort_by_data_size);
+    // sort(sorted_vector.begin(), sorted_vector.end(), sort_by_packet_count);
+
+    for (size_t cnt = 0; cnt < min(sorted_vector.size(), size_t(10)); ++cnt) 
+    {
+        auto &entry = sorted_vector[cnt];
+        mvprintw(cnt + 2, 0 , "%s", entry.first.first_addr.c_str());
+        mvprintw(cnt + 2, 20 , "%s", entry.first.second_addr.c_str());
+        mvprintw(cnt + 2, 40 , "%s", convert_protocol(entry.first.def_protocol).c_str());
+        mvprintw(cnt + 2, 50 , "%s", convert_bandwidth(entry.second.first.first).c_str());
+        mvprintw(cnt + 2, 58 , "%s", convert_bandwidth(entry.second.first.second).c_str());
+        mvprintw(cnt + 2, 65 , "%s", convert_bandwidth(entry.second.second.first).c_str());
+        mvprintw(cnt + 2, 73 , "%s", convert_bandwidth(entry.second.second.second).c_str());
+    }
+    refresh();
+}
 
 int main(int argc, char *argv[])
 {
@@ -109,18 +201,23 @@ int main(int argc, char *argv[])
         return(-2);
     }
     
-    cout << "Source IP       | Destination IP  | Protocol | Rx size | Tx size" << endl;
-
-    pcap_loop(handler, 1000, callback, NULL);
-    for (auto element : communication)
+    initscr();	
+    
+    thread pcap_thread([&] 
     {
-        cout 
-        << element.first.first_addr << " | "
-        << element.first.second_addr << " | "
-        << element.first.def_protocol << " | "
-        << element.second.first << " | "
-        << element.second.second << endl;
+        pcap_loop(handler, 0, callback, NULL);
+    });
+
+    while (true) 
+    {
+        print_head();
+        print_stats();
+        this_thread::sleep_for(chrono::seconds(1));
+        clear();
     }
+
+    endwin();
+    pcap_thread.join();
 	pcap_freecode(&filter);
     pcap_close(handler);
 }
