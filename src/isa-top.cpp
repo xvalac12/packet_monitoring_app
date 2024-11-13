@@ -163,6 +163,7 @@ void print_stats()
     refresh();
 }
 
+
 int main(int argc, char *argv[])
 {
     // enp4s0
@@ -188,21 +189,25 @@ int main(int argc, char *argv[])
     handler = pcap_open_live(device.c_str(), BUFSIZ, true, 1000, errbuf);
 	if (handler == NULL)
     {
-        cerr << "Error in opening device " << errbuf << endl; 
+        cerr << "Error in opening device " << errbuf << endl;
+        pcap_freecode(&filter);
+        return(-2);
     }
+   
     // handler, struct of filter, string with rules, is optimized, address of interface
     filter_err = pcap_compile(handler, &filter, ruleset.c_str(), 0, address);
-    // handler, struct of filter
+        // handler, struct of filter
     filter_err = pcap_setfilter(handler, &filter);
 
     if (filter_err == -1)
     {
         cerr << "Error in setting filter: "<< pcap_geterr(handler) << endl;
+        pcap_freecode(&filter);
         return(-2);
     }
-    
+        
     initscr();	
-    
+        
     thread pcap_thread([&] 
     {
         pcap_loop(handler, 0, callback, NULL);
@@ -218,6 +223,6 @@ int main(int argc, char *argv[])
 
     endwin();
     pcap_thread.join();
-	pcap_freecode(&filter);
+    pcap_freecode(&filter);    
     pcap_close(handler);
 }
