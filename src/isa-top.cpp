@@ -3,6 +3,8 @@
 #include <iostream>             // std c++
 #include <string>               // string data type
 #include <map>                  // map container
+#include <tuple>
+#include <algorithm>
 
 #include <pcap.h>               // packet capturing
 #include <netinet/ip.h>         // ip header
@@ -10,31 +12,62 @@
 #include <netinet/udp.h>        // udp header
 #include <netinet/ip_icmp.h>    // icmp header
 
+
 using namespace std;
 
 
 struct Packet
 {
-    string src_addr;
-    string dst_addr;
-    int protocol;
-    int size;
+    string first_addr;
+    string second_addr;
+    int def_protocol;
+    
+    // used for 
+   
+
+    Packet(string& src_addr, string& dst_addr, int protocol) 
+    {
+        if (src_addr > dst_addr) {
+            first_addr = src_addr;
+            second_addr = dst_addr;
+        } 
+        else 
+        {
+            first_addr = dst_addr;
+            second_addr = src_addr;
+        }
+        def_protocol = protocol;
+    }
+
+    bool operator<(const Packet& other) const 
+    {
+        return 
+        tie(first_addr, second_addr, def_protocol) < 
+        tie(other.first_addr, other.second_addr, other.def_protocol);
+    }
 };
+
+map<Packet, pair<int, int>> communication;
 
 void callback(u_char *args, const struct pcap_pkthdr *header, const u_char *packet)
 {
-    struct ip *ipv4_header = (struct ip*)(packet + 14);
+    struct ip *ipv4_header = (struct ip*)(packet + 14); // skip header
     
-    Packet new_packet;
-    new_packet.src_addr = inet_ntoa(ipv4_header->ip_src);
-    new_packet.dst_addr = inet_ntoa(ipv4_header->ip_src);
-    new_packet.protocol = ipv4_header->ip_p;
-    new_packet.size = header->len;
+    string src_addr = inet_ntoa(ipv4_header->ip_src);
+    string dst_addr = inet_ntoa(ipv4_header->ip_dst);
+    int protocol = ipv4_header->ip_p;
+    int data_size = header->len;
 
-    cout << new_packet.src_addr << " | "
-    << new_packet.dst_addr << " |    "
-    << new_packet.protocol << "    | "
-    << new_packet.size  << " b"<< endl;  
+    Packet new_packet(src_addr, dst_addr, protocol);
+
+    if (src_addr == new_packet.first_addr)
+    {
+        communication[new_packet].first += data_size;
+    }
+    else
+    {
+        communication[new_packet].second += data_size;
+    }
 }
 
 
@@ -76,11 +109,18 @@ int main(int argc, char *argv[])
         return(-2);
     }
     
+    cout << "Source IP       | Destination IP  | Protocol | Rx size | Tx size" << endl;
 
-    cout << "Source IP       | Destination IP  | Protocol | Packet Size" << endl;
-
-    pcap_loop(handler, 10, callback, NULL);
-    
+    pcap_loop(handler, 1000, callback, NULL);
+    for (auto element : communication)
+    {
+        cout 
+        << element.first.first_addr << " | "
+        << element.first.second_addr << " | "
+        << element.first.def_protocol << " | "
+        << element.second.first << " | "
+        << element.second.second << endl;
+    }
 	pcap_freecode(&filter);
     pcap_close(handler);
 }
