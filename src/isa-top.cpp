@@ -1,4 +1,5 @@
 #include <stdio.h>              // std c
+#include <unistd.h>             // getopt function
 
 #include <iostream>             // std c++
 #include <string>               // string data type
@@ -142,13 +143,20 @@ void print_head()
     mvprintw(1, 65, "b/s     p/s");
 }
 
-void print_stats() 
+void print_stats(bool sort_by_size) 
 {
     vector<pair<Packet, pair<pair<int, int>, pair<int, int>>>> sorted_vector(communication.begin(), communication.end());
-    communication.clear();
-    sort(sorted_vector.begin(), sorted_vector.end(), sort_by_data_size);
-    // sort(sorted_vector.begin(), sorted_vector.end(), sort_by_packet_count);
+    communication.clear(); // clear content of map
 
+    if (sort_by_size)
+    {
+        sort(sorted_vector.begin(), sorted_vector.end(), sort_by_data_size);
+    }
+    else
+    {
+        sort(sorted_vector.begin(), sorted_vector.end(), sort_by_packet_count);
+    }
+    
     for (size_t cnt = 0; cnt < min(sorted_vector.size(), size_t(10)); ++cnt) 
     {
         auto &entry = sorted_vector[cnt];
@@ -166,11 +174,66 @@ void print_stats()
 
 int main(int argc, char *argv[])
 {
+
+    int option;
+    string interface;
+    int time_interval = 1;
+    bool sort_by_size = true;
+
+    
+    while ((option = getopt(argc, argv, "i:s:t:h")) != -1) 
+    {
+        switch (option) 
+        {
+            case 'i':
+                interface = optarg;
+                break;
+            case 's':
+                if (optarg[0] == 'b')
+                {
+                    sort_by_size = true;
+                } 
+                else if (optarg[0] == 'p')
+                {
+                    sort_by_size = false;
+                }
+                else
+                {
+                    cerr << "Invalid value for -s. Print usage with ./isa-top -h"  << endl;;
+                    return 1;
+                }
+                break;
+            case 't':
+                try 
+                {
+                    time_interval = stoi(optarg);
+                } 
+                catch (invalid_argument& e) 
+                {
+                    cerr << "Invalid value for -t. It must be a integer number."  << endl;;
+                    return 1;
+                }
+                break;
+            case 'h': // Handle unknown options
+                cerr << "Usage: ./isa-top -i <interface> [-s b|p] [-t <time>]" << endl;
+                return -1;
+            default:
+                cerr << "Unknown option " << static_cast<char>(optopt) << endl;
+                return 1;
+        }
+    }
+
+    if (interface.empty()) 
+    {
+        cerr << "Error: The -i option (interface) is required. Print usage with ./isa-top -h" << endl;
+        return 1;
+    }
+
     // enp4s0
     char errbuf[PCAP_ERRBUF_SIZE];
 
-	const string device = "enp4s0";
-    const string ruleset = "udp or tcp or icmp";
+	
+    string ruleset = "udp or tcp or icmp";
     struct bpf_program filter;
     auto filter_err = 0;
     pcap_t *handler;
@@ -179,14 +242,14 @@ int main(int argc, char *argv[])
     bpf_u_int32 address;
 
 
-    if (pcap_lookupnet(device.c_str(), &address, &mask, errbuf) == -1)
+    if (pcap_lookupnet(interface.c_str(), &address, &mask, errbuf) == -1)
     {
         cerr << "No netmask for interface" << endl;
         address = 0, mask = 0;
     }
 
     // device name, maximum number of bytes to capture, promisc. mode, timeout in ms, string for error
-    handler = pcap_open_live(device.c_str(), BUFSIZ, true, 1000, errbuf);
+    handler = pcap_open_live(interface.c_str(), BUFSIZ, true, 1000, errbuf);
 	if (handler == NULL)
     {
         cerr << "Error in opening device " << errbuf << endl;
@@ -216,8 +279,8 @@ int main(int argc, char *argv[])
     while (true) 
     {
         print_head();
-        print_stats();
-        this_thread::sleep_for(chrono::seconds(1));
+        print_stats(sort_by_size);
+        this_thread::sleep_for(chrono::seconds(time_interval));
         clear();
     }
 
