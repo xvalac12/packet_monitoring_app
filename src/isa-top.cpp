@@ -96,7 +96,9 @@ map<Packet, pair<pair<int,int>, pair<int,int>>> communication;
 void callback(u_char *args, const struct pcap_pkthdr *header, const u_char *packet)
 {
     struct ip *ethernet_header = (struct ip*)(packet + 14); // lenght of ethernet header
-    uint16_t ether_type = ntohs(*(uint16_t*)(packet + 12));
+    uint16_t ether_type = ntohs(*(uint16_t*)(packet + 12)); // EtherType from ethernet frame
+    
+    
     int data_size = header->len;
     int src_port = 0;
     int dst_port = 0;
@@ -104,7 +106,8 @@ void callback(u_char *args, const struct pcap_pkthdr *header, const u_char *pack
     string dst_addr; 
     int protocol = 0;
 
-    if (ether_type == 0x0800) 
+    
+    if (ether_type == 0x0800)   // ipv4 packet
     {
         protocol = ethernet_header->ip_p;
         src_addr = inet_ntoa(ethernet_header->ip_src);
@@ -123,7 +126,7 @@ void callback(u_char *args, const struct pcap_pkthdr *header, const u_char *pack
             dst_port = ntohs(udp->uh_dport);
         }
     }
-    else if (ether_type == 0x86DD) 
+    else if (ether_type == 0x86DD)  // ipv6 packet 
     { 
         struct ip6_hdr *ipv6_header = (struct ip6_hdr*)(packet + 14);
         char readable_src_ip[INET6_ADDRSTRLEN];
