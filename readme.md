@@ -10,7 +10,7 @@
 - /src/isa-top.cpp
 - /src/Makefile
 - readme.md
-- documentaion.pdf
+- documentation.pdf
 
 ## Description of the implementation
 
