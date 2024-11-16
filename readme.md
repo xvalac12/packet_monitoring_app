@@ -15,7 +15,7 @@
 ## Description of the implementation
 
 The application is implemented in the C/C++ programming language using standard C and C++ libraries  and libraries for handling packets.  
-The compilation is done using a **Makefile**  and the `make` command . It has been tested to run on Ubuntu 24 and Linux Mint 22 Cinnamon and Windows 11. 
+The compilation is done using a **Makefile**  and the `make` command . It has been tested to run on Ubuntu 24 and Linux Mint 22 Cinnamon. 
 Note that this application requires root privileges to capture network traffic.
 
 ### Requirements
@@ -31,12 +31,8 @@ To use this application, you will need the following:`
 `./isa-top -i interface [-s b|p] [-t time] [-h]`
 
 `-i interface`: interface to sniff
-<!---
-, if this parameter is not specified or name of interface is not specified, list of available interfaces is printed
--->
 `-s b|p`: sort statistics by number of bytes (b) or number of packets
 `-t time`: refresh time of statistics
-
 `-h`: print usage and exit application
 
 Arguments can be in any order. If argument -s is not specified, traffic is  sorted by number of bytes. If argument -t is not specified, default value is 1 (1 second).
@@ -108,8 +104,3 @@ At the end, program cleans up resources from packet capturing, join sniffing thr
 - [3][UDP Protocol | User Datagram Protocol](https://www.javatpoint.com/udp-protocol#:~:text=UDP%20Header%20Format,would%20be%2065%2C535%20minus%2020) - _Javatpoint_. Accessed 14 Nov. 2024.
 
 - [4][What Is ICMP Protocol.](https://www.tutorialspoint.com/what-is-icmp-protocol#:~:text=ICMP%20Message%20Format,255%20are%20the%20data%20messages) - _Online Courses and EBooks Library_. Accessed 14 Nov. 2024.
-<!---
-`- [7][Internet Control Message Protocol Version 6 (ICMPv6) Parameters](https://www.iana.org/assignments/icmpv6-parameters/icmpv6-parameters.xhtml) - _Internet Assigned Numbers Authority_. Accessed 17 Apr. 2023.`
-
-`- [NESFIT/IPK-Projekty - IPK-Projekty - FIT - VUT Brno - Git.](https://git.fit.vutbr.cz/NESFIT/IPK-Projekty/src/branch/master) _FIT - VUT Brno - Git_. Accessed 21 Mar. 2023.`
--->

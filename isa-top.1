@@ -1,0 +1,58 @@
+.TH ISA-TOP 1 "November 16, 2024" "Version 1.0" "Application for obtaining statistics of network traffic"
+.SH NAME
+isa-top
+
+.SH SYNOPSIS
+.B isa-top
+\-i <interface> [\-s b|p] [\-t <time>] [\-h]
+
+.SH DESCRIPTION
+.B isa-top
+is a command-line tool for sniffing of network traffic on a specified network interface. It captures packets using the \fBlibpcap\fR library, processes packet data, and displays statistics categorized by IP addresses, ports, and protocols using a terminal-based interface built with \fBncurses\fR.
+
+.SH OPTIONS
+.TP
+.B \-i <interface>
+Specifies the network interface to sniff. This option is mandatory.
+.TP
+.B \-s <b|p>
+Sorts the output by data size (\fBb\fR) or packet count (\fBp\fR). The default is sorting by data size.
+.TP
+.B \-t <time>
+Sets the refresh interval in seconds. The default interval is 1 second. Must be an unsigned integer greater than or equal to 1.
+.TP
+.B \-h
+Displays help information about usage.
+
+.SH EXAMPLES
+Run the program to sniff the \fBeth0\fR interface, sorting by data size and updating every 2 seconds:
+.EX
+isa-top \-i eth0 \-s b \-t 2
+.EE
+
+Sbiff the \fBenp4s0\fR interface with default settings:
+.EX
+isa-top \-i enp4s0
+.EE
+
+.SH USAGE GUIDE
+Upon execution, \fBisa-top\fR initializes packet capturing on the specified interface and uses a multithreaded approach to handle packet capture and display. The output displays:
+.IP
+- Source and destination IP addresses with corresponding ports.
+.EX
+- Protocol type (TCP, UDP, ICMP).
+.EX
+- Data size and packet counts for received (Rx) and transmitted (Tx) communications.
+
+.SH NOTES
+- Requires root privileges to access network interfaces.
+.EX
+- The program filters packets to capture only TCP, UDP, and ICMP traffic.
+.EX
+- Utilizes the \fBncurses\fR library for terminal-based display and may not run in non-interactive terminal environments.
+
+.SH AUTHOR
+Written by Martin Valach.
+
+.SH COPYRIGHT
+This is free software.
