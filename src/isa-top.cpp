@@ -427,8 +427,6 @@ int main(int argc, char *argv[])
     // init od ncurses window    
     initscr();	
         
-    //
-    thread pcap_thread;
     // thread for capturing packets
     thread pcap_thread([&] 
     {
