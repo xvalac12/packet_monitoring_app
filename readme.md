@@ -2,20 +2,20 @@
 
 ## About me
 
-Martin Valach xvalac12
-14.11.2024
+- Martin Valach `xvalac12`
+- 14.11.2024
 
 ## Submitted files
 
-/src/isa-top.cpp
-/src/Makefile
-readme.md
-documentaion.pdf
+- /src/isa-top.cpp
+- /src/Makefile
+- readme.md
+- documentaion.pdf
 
 ## Description of the implementation
 
 The application is implemented in the C/C++ programming language using standard C and C++ libraries  and libraries for handling packets.  
-The compilation is done using a **Makefile**  and the `make` command . It has been tested to run on Ubuntu, Linux Mint 22 Cinnamon and Windows 11. 
+The compilation is done using a **Makefile**  and the `make` command . It has been tested to run on Ubuntu 24 and Linux Mint 22 Cinnamon and Windows 11. 
 Note that this application requires root privileges to capture network traffic.
 
 ### Requirements
@@ -25,8 +25,6 @@ To use this application, you will need the following:`
 - g++ compiler
 
 - libpcap library [1]
-
-- maybe something else
 
 ### Command Line Arguments
 
@@ -43,13 +41,28 @@ To use this application, you will need the following:`
 
 Arguments can be in any order. If argument -s is not specified, traffic is  sorted by number of bytes. If argument -t is not specified, default value is 1 (1 second).
 
-### Main file isa-top.cpp
+### Program
 
-Something basic about code.
+The user provides a network interface name and optional parameters for sorting and refresh interval. The program sets up the capturing handler, applying filters `(tcp or udp or icmp)` to capture defined packets.
+Then separate thread runs `pcap_loop()` function to capture packets and calls `callback()` funtion for each packet.
+The callback() function extracts key information from each packet and updates the `map` with communications.
+The main thread uses `ncurses` library to periodically print formatted communication statistics.
+The statistics are sorted based on either data size or packet count, as specified by the user.
+At the end, program cleans up resources from packet capturing, join sniffing thread back to main thread and ends `ncurses` window when the program is terminated `(ctrl+c)`.
+
 
 ### Implemented features
 
-Something about how the application works.
+- working command line arguments
+- working communication statistics print for maximum of 10 communications
+- receiving and transmitting communication is print as bidirectional communication
+- working sorting by size/packets
+- packets and packet size is print with correct unit
+- default refresh rate is 1 second
+- additionally, user can entered custom refresh rate
+- IPv4 and IPv6 are supported
+- TCP, UDP and ICMP protocols are supported
+
 
 ## Structure of packets
 
@@ -85,33 +98,6 @@ Something about how the application works.
 | Type | 1 byte | The port number on the sender's device |
 | Code | 1 byte | The port number on the recipient's device |
 | Checksum | 2 bytes | The length of the entire UDP packet |
-
-## Testing
-
-Testing was performed on two operation systems: Ubuntu OS and Linux Mint (linux-x64). On the left is output of application, on the right is comparison with wireshark application.
-
-
-`## Ubuntu 22.04`
-
-`### Tests with correct input`
-
-`sudo ./isa-top -i enp4s0`
-
-
-
-`### Tests with incorrect input or other error`
-
-**Duplicate argument** (``sudo ./isa-top -i -i``)
-
-![Duplicate argument](tests/errors/duplicate_argument.png
-
-**No interface name entered** (``sudo ./isa-top -i``)
-
-![No interface name entered](tests/errors/no_interface_name.png
-
-**No root permission** (``sudo ./isa-top -i enp4s0``)
-
-![No root permission](tests/errors/without_root_permision.png
 
 ## Bibliography
 
