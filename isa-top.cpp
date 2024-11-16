@@ -1,3 +1,11 @@
+/**
+ * @file isa-top.cpp
+ * @author Martin Valach (xvalac12@stud.fit.vut.cz)
+ * @brief Application for obtaining statistics of network traffic
+ * @date 14.11.2024 
+ */
+
+
 /*                      C Libraries                       */
 #include <stdio.h>              // std c
 #include <unistd.h>             // getopt function
