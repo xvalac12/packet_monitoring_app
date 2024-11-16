@@ -11,7 +11,7 @@
 #include <iomanip>              // precision set
 #include <sstream>
 
-/*                      Networking libraries               */
+/*                   Networking libraries                  */
 #include <pcap.h>               // packet capturing
 #include <netinet/ip.h>         // ipv4 header
 #include <netinet/ip6.h>        // ipv6 header 
@@ -41,16 +41,17 @@ struct Packet
     /**
      * @brief Construct a new Packet object
      * 
-     * @param src_addr 
-     * @param dst_addr 
-     * @param src_port 
-     * @param dst_port 
-     * @param protocol 
+     * @param src_addr source address of packet
+     * @param dst_addr destination address of packet
+     * @param src_port source port of packet
+     * @param dst_port destination port of packet
+     * @param protocol packet protocol
      */
     Packet(string& src_addr, string& dst_addr, int src_port, int dst_port, int protocol) 
     {
         def_protocol = protocol;
 
+        // used for bidirectional communication
         if (src_addr > dst_addr)
         {
             first_addr = src_addr;
@@ -98,28 +99,25 @@ void callback(u_char *args, const struct pcap_pkthdr *header, const u_char *pack
     struct ip *ethernet_header = (struct ip*)(packet + 14); // lenght of ethernet header
     uint16_t ether_type = ntohs(*(uint16_t*)(packet + 12)); // EtherType from ethernet frame
     
-    
-    int data_size = header->len;
-    int src_port = 0;
-    int dst_port = 0;
-    string src_addr;
-    string dst_addr; 
-    int protocol = 0;
+    int data_size = header->len;    // full lenght of packet before capturing
+    int src_port = 0, dst_port = 0, protocol = 0;
+    string src_addr, dst_addr; 
 
-    
+    // ntohs() - network to host short, because of endians - used for port convering
+
     if (ether_type == 0x0800)   // ipv4 packet
     {
         protocol = ethernet_header->ip_p;
         src_addr = inet_ntoa(ethernet_header->ip_src);
         dst_addr = inet_ntoa(ethernet_header->ip_dst);
     
-        if (ethernet_header->ip_p == 6)
+        if (ethernet_header->ip_p == 6) // tcp
         {
             struct tcphdr *tcp = (struct tcphdr*)(packet + 14 + ethernet_header->ip_hl * 4);
             src_port = ntohs(tcp->th_sport);
             dst_port = ntohs(tcp->th_dport);
         } 
-        else if (ethernet_header->ip_p == 17) 
+        else if (ethernet_header->ip_p == 17) //udp
         {
             struct udphdr *udp = (struct udphdr*)(packet + 14 + ethernet_header->ip_hl * 4);
             src_port = ntohs(udp->uh_sport);
@@ -129,8 +127,8 @@ void callback(u_char *args, const struct pcap_pkthdr *header, const u_char *pack
     else if (ether_type == 0x86DD)  // ipv6 packet 
     { 
         struct ip6_hdr *ipv6_header = (struct ip6_hdr*)(packet + 14);
-        char readable_src_ip[INET6_ADDRSTRLEN];
-        char readable_dst_ip[INET6_ADDRSTRLEN];
+        char readable_src_ip[46];
+        char readable_dst_ip[46];
 
         inet_ntop(AF_INET6, &(ipv6_header->ip6_src), readable_src_ip, INET6_ADDRSTRLEN);
         inet_ntop(AF_INET6, &(ipv6_header->ip6_dst), readable_dst_ip, INET6_ADDRSTRLEN);
@@ -139,13 +137,13 @@ void callback(u_char *args, const struct pcap_pkthdr *header, const u_char *pack
         dst_addr = readable_dst_ip;
         protocol = ipv6_header->ip6_nxt;
 
-        if (protocol == 6) 
+        if (protocol == 6) // tcp
         {
             struct tcphdr *tcp = (struct tcphdr*)(packet + 14 + sizeof(struct ip6_hdr));
             src_port = ntohs(tcp->th_sport);
             dst_port = ntohs(tcp->th_dport);
         } 
-        else if (protocol == 17) 
+        else if (protocol == 17) // udp
         {
             struct udphdr *udp = (struct udphdr*)(packet + 14 + sizeof(struct ip6_hdr));
             src_port = ntohs(udp->uh_sport);
@@ -153,16 +151,18 @@ void callback(u_char *args, const struct pcap_pkthdr *header, const u_char *pack
         }
     }
 
+    // skip protocol 128
     if (protocol == 128) return;
 
     Packet new_packet(src_addr, dst_addr, src_port, dst_port, protocol);
 
+    // data and packets to RX
     if (src_addr == new_packet.first_addr && dst_addr == new_packet.second_addr)
     {
         communication[new_packet].first.first += data_size;
         communication[new_packet].first.second += 1;
     }
-    else
+    else // data and packets to TX
     {
         communication[new_packet].second.first += data_size;
         communication[new_packet].second.second += 1;
@@ -170,12 +170,12 @@ void callback(u_char *args, const struct pcap_pkthdr *header, const u_char *pack
 }
 
 /**
- * @brief 
+ * @brief aux function for sorting vector with communication by data size
  * 
- * @param first_pair 
- * @param second_pair 
- * @return true 
- * @return false 
+ * @param first_pair first communication
+ * @param second_pair second communicatiom
+ * @return true if is first communication bigger
+ * @return false if the first communication isn't bigger
  */
 bool sort_by_data_size(pair<Packet, pair<pair<int, int>, pair<int, int>>>& first_pair, pair<Packet, pair<pair<int, int>, pair<int, int>>>& second_pair) 
 {
@@ -183,12 +183,12 @@ bool sort_by_data_size(pair<Packet, pair<pair<int, int>, pair<int, int>>>& first
 }
 
 /**
- * @brief 
+ * @brief aux function for sorting vector with communication by number of packets
  * 
- * @param first_pair 
- * @param second_pair 
- * @return true 
- * @return false 
+ * @param first_pair first communication
+ * @param second_pair second communication
+ * @return true if is first communication has more packets
+ * @return false if the first communication hasn't more packets
  */
 bool sort_by_packet_count(pair<Packet, pair<pair<int, int>, pair<int, int>>>& first_pair, pair<Packet, pair<pair<int, int>, pair<int, int>>>& second_pair) 
 {
@@ -196,10 +196,10 @@ bool sort_by_packet_count(pair<Packet, pair<pair<int, int>, pair<int, int>>>& fi
 }
 
 /**
- * @brief 
+ * @brief convert bandwidth to correct value with unit 
  * 
- * @param value 
- * @return string 
+ * @param value full integer value
+ * @return string converted value with unit
  */
 string convert_bandwidth(float value) 
 {
@@ -227,10 +227,10 @@ string convert_bandwidth(float value)
 }    
 
 /**
- * @brief 
+ * @brief covert IANA protocol number to protocol keyword name
  * 
- * @param value 
- * @return string 
+ * @param value IANA protocol number 
+ * @return string with protocol keyword name
  */
 string convert_protocol(int value)
 {
@@ -252,7 +252,7 @@ string convert_protocol(int value)
 }
 
 /**
- * @brief 
+ * @brief print static header of communication statistics
  * 
  */
 void print_head()
@@ -267,14 +267,17 @@ void print_head()
 }
 
 /**
- * @brief 
+ * @brief function for printing communication statistics using ncurses
  * 
- * @param sort_by_size 
+ * @param sort_by_size bool value to determinate order of statistic
  */
 void print_stats(bool sort_by_size) 
 {
+    // aux vector for copy content of the map
+    
     vector<pair<Packet, pair<pair<int, int>, pair<int, int>>>> sorted_vector(communication.begin(), communication.end());
     communication.clear(); // clear content of map
+
 
     if (sort_by_size)
     {
@@ -288,12 +291,14 @@ void print_stats(bool sort_by_size)
     for (size_t cnt = 0; cnt < min(sorted_vector.size(), size_t(10)); ++cnt) 
     {
         auto &entry = sorted_vector[cnt];
+
+        // icmp has no port number, so we skip printing it
         if (convert_protocol(entry.first.def_protocol) == "ICMP")
         {
             mvprintw(2 + cnt, 0 , "%s", entry.first.first_addr.c_str());
             mvprintw(2 + cnt, 45 , "%s", entry.first.second_addr.c_str());
         }
-        else
+        else // tcp and udp have port number
         {
             mvprintw(2 + cnt, 0 , "%s:%d", entry.first.first_addr.c_str(), entry.first.first_port);
             mvprintw(2 + cnt, 45 , "%s:%d", entry.first.second_addr.c_str(), entry.first.second_port);
@@ -307,22 +312,24 @@ void print_stats(bool sort_by_size)
     refresh();
 }
 
+
 /**
- * @brief 
+ * @brief Main function of program
  * 
- * @param argc 
- * @param argv 
- * @return int 
+ * @param argc number of program arguments
+ * @param argv array of program arguments
+ * @return int integer number in case of error
  */
 int main(int argc, char *argv[])
 {
+
 
     int option;
     string interface;
     int time_interval = 1;
     bool sort_by_size = true;
 
-    
+    // cli arguments parsing
     while ((option = getopt(argc, argv, "i:s:t:h")) != -1) 
     {
         switch (option) 
@@ -352,7 +359,7 @@ int main(int argc, char *argv[])
                 } 
                 catch (invalid_argument& e) 
                 {
-                    cerr << "Invalid value for -t. It must be a integer number."  << endl;;
+                    cerr << "Invalid value for -t. It must be a unsigned integer number."  << endl;;
                     return 1;
                 }
                 break;
@@ -365,17 +372,22 @@ int main(int argc, char *argv[])
         }
     }
 
+    // interval must be at least 1
+    if (time_interval < 1)
+    {
+        cerr << "Invalid value for -t. It must be a unsigned integer number."  << endl;
+        return 1;    
+    }
+
+    // no interface name entered
     if (interface.empty()) 
     {
         cerr << "Error: The -i option (interface) is required. Print usage with ./isa-top -h" << endl;
         return 1;
     }
 
-    // enp4s0
-    char errbuf[PCAP_ERRBUF_SIZE];
-
-	
-    string ruleset = "udp or tcp or icmp";
+    char errbuf[PCAP_ERRBUF_SIZE];	
+    string ruleset = "udp or tcp or icmp"; // filter for packet capturing
     struct bpf_program filter;
     auto filter_err = 0;
     pcap_t *handler;
@@ -401,7 +413,8 @@ int main(int argc, char *argv[])
    
     // handler, struct of filter, string with rules, is optimized, address of interface
     filter_err = pcap_compile(handler, &filter, ruleset.c_str(), 0, address);
-        // handler, struct of filter
+    
+    // handler, struct of filter
     filter_err = pcap_setfilter(handler, &filter);
 
     if (filter_err == -1)
@@ -410,14 +423,20 @@ int main(int argc, char *argv[])
         pcap_freecode(&filter);
         return(-2);
     }
-        
+
+    // init od ncurses window    
     initscr();	
         
+    //
+    thread pcap_thread;
+    // thread for capturing packets
     thread pcap_thread([&] 
     {
         pcap_loop(handler, 0, callback, NULL);
     });
 
+
+    // infinite loop for ncurses printing
     while (true) 
     {
         print_head();
